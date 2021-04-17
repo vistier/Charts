@@ -187,6 +187,12 @@ open class ChartViewBase: NSUIView, ChartDataProvider, AnimatorDelegate
     
     // MARK: - ChartViewBase
     
+    // Add by luwenhan adi
+    open func getChartView(_ chartViews:ChartViewBase)
+    {
+        
+    }
+    
     /// Clears the chart from all data (sets it to null) and refreshes it (by calling setNeedsDisplay()).
     @objc open func clear()
     {
