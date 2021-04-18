@@ -199,6 +199,12 @@ open class ChartViewBase: NSUIView, ChartDataProvider, AnimatorDelegate
     
     // MARK: - ChartViewBase
     
+    // Add by luwenhan adi
+    open func getChartView(_ chartViews:ChartViewBase)
+    {
+        
+    }
+    
     /// The data for the chart
     open var data: ChartData?
     {

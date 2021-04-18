@@ -99,6 +99,11 @@ open class BarLineChartViewBase: ChartViewBase, BarLineScatterCandleBubbleChartD
     /// flag that indicates if a custom viewport offset has been set
     private var _customViewPortEnabled = false
     
+    // Add by luwenhan adi
+        internal var _comChartView :ChartViewBase!
+        // Add by luwenhan adi 处理长按事件
+        internal var _longPressTapGestureRecognizer:UILongPressGestureRecognizer!
+    
     public override init(frame: CGRect)
     {
         super.init(frame: frame)
@@ -128,11 +133,17 @@ open class BarLineChartViewBase: ChartViewBase, BarLineScatterCandleBubbleChartD
         _doubleTapGestureRecognizer.nsuiNumberOfTapsRequired = 2
         _panGestureRecognizer = NSUIPanGestureRecognizer(target: self, action: #selector(panGestureRecognized(_:)))
         
+        // Add by luwenhan adi
+                _longPressTapGestureRecognizer = UILongPressGestureRecognizer(target: self, action: (#selector(BarLineChartViewBase.longPressGestureRecognized(_:))))
+        
         _panGestureRecognizer.delegate = self
         
         self.addGestureRecognizer(_tapGestureRecognizer)
         self.addGestureRecognizer(_doubleTapGestureRecognizer)
         self.addGestureRecognizer(_panGestureRecognizer)
+        
+        // Add by luwenhan adi
+                self.addGestureRecognizer(_longPressTapGestureRecognizer)
         
         _doubleTapGestureRecognizer.isEnabled = _doubleTapToZoomEnabled
         _panGestureRecognizer.isEnabled = _dragXEnabled || _dragYEnabled
@@ -144,6 +155,11 @@ open class BarLineChartViewBase: ChartViewBase, BarLineScatterCandleBubbleChartD
         _pinchGestureRecognizer.isEnabled = _pinchZoomEnabled || _scaleXEnabled || _scaleYEnabled
         #endif
     }
+    
+    // Add by luwenhan  adi
+        open override func getChartView(_ chartViews: ChartViewBase) {
+            _comChartView = chartViews;
+        }
     
     open override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?)
     {
@@ -243,6 +259,12 @@ open class BarLineChartViewBase: ChartViewBase, BarLineScatterCandleBubbleChartD
         context.restoreGState()
         
         renderer.drawExtras(context: context)
+        
+        //Add by luwenhan adi : X轴只画最左边和最右边的值
+                //xAxisRenderer.setXIndexRange(_autoScaleLastLowestVisibleX, highestIndex: _autoScaleLastHighestVisibleX)
+                xAxisRenderer.renderAxisLabels(context: context)
+                leftYAxisRenderer.renderAxisLabels(context: context)
+                rightYAxisRenderer.renderAxisLabels(context: context)
         
         if _xAxis.isEnabled && !_xAxis.isDrawLimitLinesBehindDataEnabled
         {
@@ -529,30 +551,36 @@ open class BarLineChartViewBase: ChartViewBase, BarLineScatterCandleBubbleChartD
     private var _decelerationDisplayLink: NSUIDisplayLink!
     private var _decelerationVelocity = CGPoint()
     
+    //Add by luwenhan adi
+        fileprivate var _pt  = CGPoint() //解决长按手势出现两条线的问题
+        
+    
     @objc private func tapGestureRecognized(_ recognizer: NSUITapGestureRecognizer)
     {
-        if _data === nil
-        {
-            return
-        }
         
-        if recognizer.state == NSUIGestureRecognizerState.ended
-        {
-            if !isHighLightPerTapEnabled { return }
-            
-            let h = getHighlightByTouchPoint(recognizer.location(in: self))
-            
-            if h === nil || h == self.lastHighlighted
-            {
-                lastHighlighted = nil
-                highlightValue(nil, callDelegate: true)
-            }
-            else
-            {
-                lastHighlighted = h
-                highlightValue(h, callDelegate: true)
-            }
-        }
+        // Modify by luwenhan adi: 修改为单击不出现HighLight线
+//        if _data === nil
+//        {
+//            return
+//        }
+//
+//        if recognizer.state == NSUIGestureRecognizerState.ended
+//        {
+//            if !isHighLightPerTapEnabled { return }
+//
+//            let h = getHighlightByTouchPoint(recognizer.location(in: self))
+//
+//            if h === nil || h == self.lastHighlighted
+//            {
+//                lastHighlighted = nil
+//                highlightValue(nil, callDelegate: true)
+//            }
+//            else
+//            {
+//                lastHighlighted = h
+//                highlightValue(h, callDelegate: true)
+//            }
+//        }
     }
     
     @objc private func doubleTapGestureRecognized(_ recognizer: NSUITapGestureRecognizer)
@@ -586,6 +614,107 @@ open class BarLineChartViewBase: ChartViewBase, BarLineScatterCandleBubbleChartD
             }
         }
     }
+    
+    /**
+         * Modify by luwenhan adi: 修改为长按出现HighLight线
+         长按手势的方法
+         - parameter recognizer: 单指长按
+         */
+        
+        @objc fileprivate func longPressGestureRecognized(_ recognizer:UILongPressGestureRecognizer)
+        {
+            if (_data == nil)
+            {
+                return
+            }
+            
+            if(recognizer.state == NSUIGestureRecognizerState.began)
+            {
+                
+               
+                if !self.isHighLightPerTapEnabled { return }
+                
+                let h = getHighlightByTouchPoint(recognizer.location(in: self))
+                var secondH = getHighlightByTouchPoint(recognizer.location(in: self))
+                
+                if (h === nil || h!.isEqual(self.lastHighlighted))
+                {
+                    
+                    self.highlightValue(nil, callDelegate: true)
+                    self.lastHighlighted = nil
+                    
+                    if((_comChartView) != nil){
+                        _comChartView.highlightValue(nil, callDelegate: true)
+                        _comChartView.lastHighlighted = nil
+                    }
+                }
+                else
+                {
+                    self.lastHighlighted = h
+                    self.highlightValue(h, callDelegate: true)
+                    
+                    if((_comChartView) != nil){
+                         _pt.x = recognizer.location(in: _comChartView).x
+                         _pt.y = -100
+                         secondH = getHighlightByTouchPoint(_pt)
+                        _comChartView.lastHighlighted = secondH
+                        _comChartView.highlightValue(secondH, callDelegate: true)
+                    }
+                }
+               
+            }
+            
+            if(recognizer.state == NSUIGestureRecognizerState.changed)
+            {
+                let h = getHighlightByTouchPoint(recognizer.location(in: self))
+                var secondH = getHighlightByTouchPoint(recognizer.location(in: self))
+                //by add luwenhan
+                if((_comChartView) != nil){
+                    secondH = getHighlightByTouchPoint(recognizer.location(in: _comChartView))
+                }
+                let lastHighlighted = self.lastHighlighted
+                
+                //buy add luwenhan
+                // let lastSecondHighligh  = _comChartView.lastHighlighted
+                
+                
+                if ((h === nil && lastHighlighted !== nil) ||
+                    (h !== nil && lastHighlighted === nil) ||
+                    (h !== nil && lastHighlighted !== nil && !h!.isEqual(lastHighlighted)))
+                {
+                    self.lastHighlighted = h
+                    
+                    //by add luwenhan
+                    if((_comChartView) != nil){
+                        _comChartView.lastHighlighted = secondH
+                    }
+                    self.highlightValue(h, callDelegate: true)
+                    if((_comChartView) != nil){
+                        //by add luwenhan
+                        _comChartView.highlightValue(secondH, callDelegate: true)
+                    }
+                }
+            }
+            
+            if(recognizer.state == NSUIGestureRecognizerState.ended || recognizer.state == NSUIGestureRecognizerState.cancelled)
+            {
+                let _ = getHighlightByTouchPoint(recognizer.location(in: self))
+                
+                if((_comChartView) != nil){
+                let _  = getHighlightByTouchPoint(recognizer.location(in: _comChartView))
+                }
+                self.lastHighlighted = nil
+                
+                if((_comChartView) != nil){
+                    _comChartView.lastHighlighted = nil
+                }
+                
+                self.highlightValue(nil, callDelegate: true)
+                if((_comChartView) != nil){
+                    _comChartView.highlightValue(nil, callDelegate: true)
+                }
+            }
+        }
     
     #if !os(tvOS)
     @objc private func pinchGestureRecognized(_ recognizer: NSUIPinchGestureRecognizer)
